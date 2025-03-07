@@ -1,0 +1,131 @@
+---
+title: "Mixed-Effects Model Analysis"
+author: "Clara Rossignol"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+# **Introduction**
+
+This analysis investigates the percentage of predicted dying neurons across different brain regions while comparing Alzheimer's disease (AD) vs. Control (CTRL) groups.\
+A **linear mixed-effects model (LMM)** is used to account for region-specific variability.
+
+------------------------------------------------------------------------
+
+# **Load Required Libraries**
+
+```{r setup, message=FALSE, warning=FALSE}
+# Load necessary packages
+library(readxl)      # Read Excel data
+library(lme4)        # Mixed-effects modeling
+library(lmerTest)    # p-values for lme4 models
+library(ggplot2)     # Data visualization
+library(dplyr)       # Data wrangling
+library(effsize)     # Effect size (Cohen's d)
+```
+
+# **Load and Inspect Data**
+
+```{r}
+# Define the data file path (adjust if necessary)
+data_file <- "E:/Clara/Mixed-effects_Model/Processed_DyingNeurons_Data.xlsx"
+
+# Read the data
+df <- read_excel(data_file)
+
+# Display first few rows of the dataset
+head(df)
+```
+
+# **Preprocessing**
+
+```{r}
+# Convert categorical variables to factors
+df$Region <- as.factor(df$Region)
+df$Group <- as.factor(df$Group)
+
+# Ensure consistent naming (CTRL → Ctrl)
+df$Group <- recode_factor(df$Group, "CTRL" = "Ctrl", "AD" = "AD")
+
+# Summary of dataset
+summary(df)
+```
+
+# **Visualizing the Data**
+
+```{r}
+# Convert PercentageDyingNeurons to numeric if it's not already
+df$PercentageDyingNeurons <- as.numeric(df$PercentageDyingNeurons)
+
+# Boxplot of Percentage of Dying Neurons by Group and Region
+ggplot(df, aes(x = Group, y = PercentageDyingNeurons, fill = Group)) +
+  geom_boxplot(alpha = 0.5, width = 0.6, outlier.shape = NA) +  # Transparent boxplots
+  geom_jitter(position = position_jitter(width = 0.2, height = 0), size = 2, alpha = 0.7) +  # Jittered points
+  facet_wrap(~ Region) +  # Separate by brain region
+  theme_minimal() +  # Clean theme
+  scale_fill_manual(values = c("Ctrl" = "#E69F00", "AD" = "#56B4E9")) +  # Custom colors
+  scale_y_continuous(breaks = pretty(df$PercentageDyingNeurons, n = 5)) +  # Reduce y-axis labels
+  labs(
+    title = "Comparison of Percentage of Dying Neurons",
+    x = "Group",
+    y = "Percentage of Dying Neurons"
+  ) +
+  theme(
+    legend.position = "right",
+    text = element_text(size = 14),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+
+# **Fitting the Mixed-Effects Model**
+
+```{r}
+# Define the mixed-effects model:
+# - Fixed effect: Group (AD vs. Ctrl)
+# - Random effect: Region (to account for region-specific variability)
+model <- lmer(PercentageDyingNeurons ~ Group + (1 | Region), data = df)
+
+# Display model summary
+summary(model)
+
+confint(model)
+```
+# **Effect Size Calculation (Cohen's d)**
+
+```{r}
+# Compute Cohen's d for AD vs. CTRL
+cohens_d <- cohen.d(df$PercentageDyingNeurons[df$Group == "AD"], 
+                    df$PercentageDyingNeurons[df$Group == "Ctrl"])
+print(cohens_d)
+```
+
+A Cohen's d of:
+
+- 0.2 = Small effect 
+- 0.5 = Medium effect
+- 0.8+ = Large effect
+
+
+# **Checking Model Assumptions**
+
+```{r}
+# Residuals plot to check homoscedasticity
+plot(model)
+
+# Q-Q plot for normality of residuals
+qqnorm(resid(model))
+qqline(resid(model))
+
+# Histogram of residuals to check distribution shape
+hist(resid(model), breaks = 20, main = "Residuals Distribution", xlab = "Residuals")
+```
+
+**Model Assumptions Summary**
+
+- Homoscedasticity: Residuals appear evenly spread, no major funneling.
+- Normality: Q-Q plot suggests residuals are normally distributed, minor deviations at the tails.
+- Residual Distribution: Slight skew, but overall normality is reasonable.
+
+Since normality assumptions look acceptable on the Q-Q plot, we do not apply a log transformation.
+
+
